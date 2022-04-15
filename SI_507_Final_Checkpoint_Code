@@ -1,0 +1,259 @@
+import json
+import requests
+
+import csv
+import json
+import requests
+
+from Tree_format import printTree1
+
+CollegeQuestionTree = \
+    ("Do you want to obtain a 4 year (i.e. Bachelors) degree? If you want a 2 year degree (i.e. associates) enter no",
+        ("Do you want to go to a large university with over 15,000 students?",
+            ("Do you want to go to a college that is designated as a minority serving school?", None, None),
+            ("List comprehension or function for yes", None, None)
+            ("List comprehension or function for no", None, None)),
+        ("Would you want to stay near your home area for community college like within a 10 mile radius?",
+            ("List comprehension or function for yes", None, None),
+            ("List comprehension or function for no", None, None)))
+
+
+#General Notes for College Question Tree: 
+#Most generic question
+#Do you want to get a four year or two year degree?
+#city or suburban
+# do you want to go to big or small school?
+#Is racial demographic affiliation important for you at your college?
+#Answer
+
+
+
+
+def get_resource(url, params=None, timeout=10):
+    """Returns a response object decoded into a dictionary. If query string < params > are
+    provided the response object body is returned in the form on an "envelope" with the data
+    payload of one or more entities to be found in ['results'] list; otherwise, response
+    object body is returned as a single dictionary representation of the entity.
+
+    Parameters:
+        url (str): a url that specifies the resource.
+        params (dict): optional dictionary of querystring arguments.
+        timeout (int): timeout value in seconds
+
+    Returns:
+        dict: dictionary representation of the decoded JSON.
+    """
+
+    if params:
+        return requests.get(url, params, timeout=timeout).json()
+    else:
+        return requests.get(url, timeout=timeout).json()
+
+
+def read_csv(filepath, encoding='utf-8', newline='', delimiter=','):
+    """
+    Reads a CSV file, parsing row values per the provided delimiter. Returns a list of lists,
+    wherein each nested list represents a single row from the input file.
+
+    WARN: If a byte order mark (BOM) is encountered at the beginning of the first line of decoded
+    text, call < read_csv > and pass 'utf-8-sig' as the < encoding > argument.
+
+    WARN: If newline='' is not specified, newlines '\n' or '\r\n' embedded inside quoted fields
+    may not be interpreted correctly by the csv.reader.
+
+    Parameters:
+        filepath (str): The location of the file to read
+        encoding (str): name of encoding used to decode the file
+        newline (str): specifies replacement value for newline '\n'
+                       or '\r\n' (Windows) character sequences
+        delimiter (str): delimiter that separates the row values
+
+    Returns:
+        list: a list of nested "row" lists
+    """
+
+    with open(filepath, 'r', encoding=encoding, newline=newline) as file_obj:
+        data = []
+        reader = csv.reader(file_obj, delimiter=delimiter)
+        for row in reader:
+            data.append(row)
+
+        return data
+
+
+def read_csv_to_dicts(filepath, encoding='utf-8', newline='', delimiter=','):
+    """Accepts a file path, creates a file object, and returns a list of dictionaries that
+    represent the row values using the cvs.DictReader().
+
+    Parameters:
+        filepath (str): path to file
+        encoding (str): name of encoding used to decode the file
+        newline (str): specifies replacement value for newline '\n'
+                       or '\r\n' (Windows) character sequences
+        delimiter (str): delimiter that separates the row values
+
+    Returns:
+        list: nested dictionaries representing the file contents
+     """
+
+    with open(filepath, 'r', newline=newline, encoding=encoding) as file_obj:
+        data = []
+        reader = csv.DictReader(file_obj, delimiter=delimiter)
+        for line in reader:
+            data.append(line) # OrderedDict()
+            # data.append(dict(line)) # convert OrderedDict() to dict
+
+        return data
+
+
+def read_json(filepath, encoding='utf-8'):
+    """Reads a JSON document, decodes the file content, and returns a list or dictionary if
+    provided with a valid filepath.
+
+    Parameters:
+        filepath (str): path to file
+        encoding (str): name of encoding used to decode the file
+
+    Returns:
+        dict/list: dict or list representations of the decoded JSON document
+    """
+
+    with open(filepath, 'r', encoding=encoding) as file_obj:
+        return json.load(file_obj)
+
+
+def write_json(filepath, data, encoding='utf-8', ensure_ascii=False, indent=2):
+    """Serializes object as JSON. Writes content to the provided filepath.
+
+    Parameters:
+        filepath (str): the path to the file
+        data (dict)/(list): the data to be encoded as JSON and written to the file
+        encoding (str): name of encoding used to encode the file
+        ensure_ascii (str): if False non-ASCII characters are printed as is; otherwise
+                            non-ASCII characters are escaped.
+        indent (int): number of "pretty printed" indention spaces applied to encoded JSON
+
+    Returns:
+        None
+    """
+
+    with open(filepath, 'w', encoding=encoding) as file_obj:
+        json.dump(data, file_obj, ensure_ascii=ensure_ascii, indent=indent)
+
+
+
+#CACHING COLLEGE SCORECARD DATA BY ZIPCODE
+
+scorecache_file = 'scorecard_cache.json' #What we want to call our json file
+
+def open_cache():
+    try: #checks to see if file exists
+        cache_file = open(scorecache_file, 'r')
+        cache_contents = cache_file.read()
+        cache_dict = json.loads(cache_contents)
+        cache_file.close()
+    except:
+        cache_dict = {}
+    return cache_dict
+
+
+def save_cache(cache_dict):
+    dumped_json_cache = json.dumps(cache_dict)
+    fw = open(scorecache_file,"w")
+    fw.write(dumped_json_cache)
+    fw.close()
+
+
+SCORECARD_CACHE = open_cache()
+
+def scorecard_with_cache(zipcode):
+    if str(zipcode) in SCORECARD_CACHE.keys():        # is result for n already there?
+        print("CASH HIT")
+        return SCORECARD_CACHE[zipcode]   # if so, look up result and return it
+    else:
+        url = f"https://api.data.gov/ed/collegescorecard/v1/schools?zip={zipcode}&distance=15mi&api_key=XnOe8R0JJpXpYaDlTm5hDkSN29IfEHQlB3SasmER"
+        response3 = requests.get(url)           # cache miss!
+        SCORECARD_CACHE[zipcode] = json.loads(response3.text) # do the operation and save the result
+        print("CASH MISSED")
+        save_cache(SCORECARD_CACHE) #saves the entire dictionary.
+        return SCORECARD_CACHE[zipcode] #info that user wants which is results
+
+
+
+
+if __name__ == "__main__":
+
+
+    #url = "https://api.data.gov/ed/collegescorecard/v1/schools?zip=92182&distance=15mi&api_key=XnOe8R0JJpXpYaDlTm5hDkSN29IfEHQlB3SasmER"
+    url = f"https://api.data.gov/ed/collegescorecard/v1/schools?zip=91423&distance=15mi&api_key=XnOe8R0JJpXpYaDlTm5hDkSN29IfEHQlB3SasmER"
+    response = requests.get(url) #the json given to us is the website
+    ScorecardData = json.loads(response.text)
+    test = ScorecardData["results"]
+    schools5 = ScorecardData["results"]
+    # schools=test[0]
+    # print(school['school'])
+
+    # SCORECARD_CACHE = {} #schools5 # define at module scope so it persists across fn calls
+
+    test_zip_is_saved = scorecard_with_cache(92127)
+    print(test_zip_is_saved)
+
+    # new_zip = scorecard_with_cache(91423)
+
+    schools = test[15]["latest"]["programs"]["cip_4_digit"][0]["school"]["type"]
+    print(schools)
+    schools2 = test[15]["latest"]["programs"]["cip_4_digit"][0]["school"]["name"]
+    print(schools2)
+    # print(ScorecardData)
+
+
+    Four_Year_Publics = 0
+    Four_Year_Publics_list = []
+    Not_4_yr = []
+    Priv_Counter = 0
+
+
+    print("CHECK SCHOOLS")
+
+    for school in schools5:
+        if school["latest"]["programs"]["cip_4_digit"][0]["school"]["type"].lower() == "public":
+            Four_Year_Publics_list.append(school["latest"]["programs"]["cip_4_digit"][0]["school"]["name"])
+            Four_Year_Publics += 1
+        elif not None:
+            Not_4_yr.append(school["latest"]["programs"]["cip_4_digit"][0]["school"]["name"])
+            Priv_Counter += 1
+
+
+    print(Four_Year_Publics)
+    print(Four_Year_Publics_list)
+
+    print('CHECK')
+
+    print(Not_4_yr)
+    print(Priv_Counter)
+
+
+    url_census = "https://api.census.gov/data/2018/acs/acs5?get=B25031_003E&for=tract:*&in=state:06%county:037&key=b026a491bed6c8d67183bd6b61b11eade7382ace"
+
+    response2 = requests.get(url_census) #the json given to us is the website
+    CensusData = json.loads(response2.text)
+
+
+
+    #GENERAL NOTES
+
+    #ASK HOW TO PAIR FIPS AND ZIP. I CANT FIND FIPS ON SCORECARD
+    #HOW TO CACHE WITH MY DATA
+    #IS IT OKAY IF ITS FUNCTIONS INSTEAD OF CLASSES
+
+    #NEXT STEPS
+    #STEP 1 Cache the data
+    #STEP 2: Write functions to capture data for college card variables and census variable
+    #STEP 3: WRITE Trees
+    #STEP 4: Write Main function with input questions to prompt user
+    #STEP 5: USE PLOTLY to make graphs with the data.
+      
+    # write_json('school.json', school)
+    write_json('censusroomcost1.json', CensusData)
+
+
